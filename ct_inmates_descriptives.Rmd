@@ -475,7 +475,7 @@ ggplot(data=bd, aes(x=bond_amount, y=dur))+
   stat_binhex()+ scale_fill_viridis(name="n in hex")+
   theme_minimal()+ theme(text=element_text(family="Palatino"))+
   theme(plot.title = element_text(hjust = 0))+
-  labs(x="Intial Bond Amount ($)", y="Jail Stay (Days)", caption="\nThe plot displays the frequency of bond amount/jail stay combinations with hexagonal bins. (See legend.) \nObservations include admissions which concluded in a release from jail before 7/28/19. (n=46,619)")+
+  labs(x="Initial Bond Amount ($)", y="Jail Stay (Days)", caption="\nThe plot displays the frequency of bond amount/jail stay combinations with hexagonal bins. (See legend.) \nObservations include admissions which concluded in a release from jail before 7/28/19. (n=46,619)")+
   scale_y_log10(labels=comma)+
   scale_x_log10(labels=comma)+ 
   ggtitle("Initial Bond and Jail Stay", subtitle = "Data Available via Connecticut Open Data")
@@ -486,3 +486,41 @@ Check correlation:
 cor(bd$bond_amount,bd$dur)
 ```
 There is a correlation of 0.368 between time in jail and initial bond bond amount.
+
+# Regression footnote
+
+```{r, message=FALSE, warning=FALSE}
+CTbond <- mutate(CTbond, chargenew = factor(offense)) %>%
+      mutate(fac_factor = factor(facility)) %>%
+      mutate(race_factor = factor(race)) %>%
+      within(race_factor <- relevel(race_factor, ref = 5)) %>%
+      mutate(gender_factor = factor(gender)) %>%
+      within(gender_factor <- relevel(gender_factor, ref = 2))
+```
+
+Use logs on dep variable for regressions.
+```{r, message=FALSE, warning=FALSE}
+reg3l <- lm(log(CTbond$bond_amount) ~  race_factor + gender_factor + age , data=CTbond)
+reg4l <- lm(log(CTbond$bond_amount) ~  race_factor + gender_factor + age + chargenew , data=CTbond)
+```
+
+Make stargazer table with robust standard errors and log of dep var.
+
+```{r, message=FALSE, warning=FALSE}
+# Adjust standard errors
+library(sandwich)
+cov         <- vcovHC(reg3l, type = "HC1")
+robust_se    <- sqrt(diag(cov))
+cov1         <- vcovHC(reg4l, type = "HC1")
+robust_se1    <- sqrt(diag(cov1))
+
+library(stargazer)
+stargazer(reg3l, reg4l, type="text", omit=c("chargenew", "fac_factor"), style="qje",
+          se = list(robust_se, robust_se1),
+          add.lines = list(c("Offense Dummies?", "No", "Yes")),
+          title = "What Explains How Bond is Set?",
+          covariate.labels = c("Asian", "Black", "Hispanic", "Native American", "Female", "Age"),
+          dep.var.labels   = "Log of Dollar Bond Amount", omit.stat=c("f", "ser"),
+          notes = "Using robust standard errors."
+          )
+```
